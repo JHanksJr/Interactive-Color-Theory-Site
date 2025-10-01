@@ -104,8 +104,6 @@
         </div>
 
         <div class="area" style="margin-top:14px">
-
-        <div class="area" style="margin-top:14px">
           <div class="card">
             <h3>Original</h3>
             <div id="orig-c"></div>
@@ -264,8 +262,17 @@ const wheelCanvas = new p5(p => {
 // ========== Image canvases ==========
 const origCanvas = new p5(p => {
   let W=520,H=360; p.setup = ()=>{ const c=p.createCanvas(W,H); c.parent(document.getElementById('orig-c')); p.background(20); }; imgOrigSketch=p;});
+let glShader;
 const procCanvas = new p5(p => {
-  let W=520,H=360; let sh; p.setup = ()=>{ const c=p.createCanvas(W,H, p.WEBGL); c.parent(document.getElementById('proc-c')); p.background(20); sh = p.createShader(vertSrc, fragSrc); }; imgProcSketch=p;});
+  let W=520, H=360;
+  p.setup = () => {
+    const c = p.createCanvas(W, H, p.WEBGL);
+    c.parent(document.getElementById('proc-c'));
+    p.background(20);
+    glShader = p.createShader(vertSrc, fragSrc);
+  };
+  imgProcSketch = p;
+});
 
 /*******************
  * Image Processing *
@@ -304,19 +311,20 @@ function applyEffects(){
     const conMul = Number(document.getElementById('con').value)/100.0;
     const duoA = document.getElementById('duoA').value; const duoB = document.getElementById('duoB').value;
     const [aR,aG,aB] = hexToRgb(duoA).map(v=>v/255); const [bR,bG,bB] = hexToRgb(duoB).map(v=>v/255);
-    p.shader(p._renderer._pInst? p._renderer._pInst.createShader: p.createShader); // noop placeholder
-    const sh = p._shader || p.createShader(vertSrc, fragSrc);
-    p.shader(sh);
-    sh.setUniform('tex0', origImg);
-    sh.setUniform('u_resolution', [w,h]);
-    sh.setUniform('u_hue', hueRot);
-    sh.setUniform('u_sat', satMul);
-    sh.setUniform('u_bri', briMul);
-    sh.setUniform('u_con', conMul);
-    sh.setUniform('u_duotone', duotoneOn?1:0);
-    sh.setUniform('u_duoA', [aR,aG,aB]);
-    sh.setUniform('u_duoB', [bR,bG,bB]);
-    p.noStroke(); p.rect(-w/2, -h/2, w, h);
+
+    if(!glShader){ glShader = imgProcSketch.createShader(vertSrc, fragSrc); }
+    imgProcSketch.shader(glShader);
+    glShader.setUniform('tex0', origImg);
+    glShader.setUniform('u_resolution', [w,h]);
+    glShader.setUniform('u_hue', hueRot);
+    glShader.setUniform('u_sat', satMul);
+    glShader.setUniform('u_bri', briMul);
+    glShader.setUniform('u_con', conMul);
+    glShader.setUniform('u_duotone', duotoneOn?1:0);
+    glShader.setUniform('u_duoA', [aR,aG,aB]);
+    glShader.setUniform('u_duoB', [bR,bG,bB]);
+    imgProcSketch.noStroke();
+    imgProcSketch.rect(-w/2, -h/2, w, h);
   } else {
     // CPU fallback (original path)
     const scale = Math.min(w/origImg.width, h/origImg.height);
@@ -343,11 +351,6 @@ function applyEffects(){
   }
 }
 
-    tmp.pixels[i]=r; tmp.pixels[i+1]=g; tmp.pixels[i+2]=b; // keep alpha
-  }
-  tmp.updatePixels();
-  p.image(tmp, (w-dw)/2, (h-dh)/2);
-}
 
 function clamp(v){ return Math.max(0, Math.min(255, v)); }
 function hexToRgb(hex){ const n=parseInt(hex.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
