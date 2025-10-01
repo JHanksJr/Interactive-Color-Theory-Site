@@ -36,7 +36,7 @@
 <body>
   <header>
     <h1>Interactive Color Theory Lab</h1>
-    <div class="sub">Drag the wheel, explore harmony guides, and apply color effects to an image.</div>
+    <div class="sub">Drag the wheel, explore harmony guides, pick exact hues, and export clean PNGs.</div>
   </header>
 
   <div class="wrap">
@@ -60,66 +60,38 @@
               <option value="complementary">Complementary</option>
               <option value="split">Split Complementary</option>
               <option value="analogous">Analogous</option>
-              <option value="triad">Triadic</option>
+              <option value="triad" selected>Triadic</option>
               <option value="tetradRect">Tetradic (Rectangle)</option>
               <option value="tetradSquare">Tetradic (Square)</option>
             </select>
           </div>
           <div>
+            <label>Hue (°)</label>
+            <input id="hueNum" type="number" min="0" max="359.9" step="0.1" value="200" />
+          </div>
+          <div>
             <label>Segments on Wheel</label>
-            <input id="segments" type="range" min="24" max="180" step="6" value="90" />
+            <input id="segments" type="range" min="180" max="1440" step="30" value="720" />
           </div>
           <div>
-            <label>Hue Rotate (°)</label>
-            <input id="hueRot" type="range" min="-180" max="180" value="0" />
+            <label>Snap to (°)</label>
+            <input id="snap" type="number" min="0" max="45" step="0.1" value="1" />
           </div>
           <div>
-            <label>Saturation</label>
-            <input id="sat" type="range" min="0" max="200" value="100" />
+            <label>Swatch Saturation (%)</label>
+            <input id="swS" type="range" min="0" max="100" value="80" />
           </div>
           <div>
-            <label>Brightness</label>
-            <input id="bri" type="range" min="0" max="200" value="100" />
-          </div>
-          <div>
-            <label>Contrast</label>
-            <input id="con" type="range" min="50" max="200" value="100" />
-          </div>
-          <div>
-            <label>Duotone: Shadow → Highlight</label>
-            <div style="display:flex; gap:8px">
-              <input type="color" id="duoA" value="#1a1a2e" title="Shadow" />
-              <input type="color" id="duoB" value="#ff7a18" title="Highlight" />
-              <button id="useHarmony">Use harmony pair</button>
-            </div>
-          </div>
-          <div>
-            <label>&nbsp;</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button id="toggleDuotone">Toggle Duotone</button>
-              <button id="resetFX">Reset FX</button>
-              <label style="display:flex;gap:6px;align-items:center;margin-left:8px"><input type="checkbox" id="useGL"> Use WebGL shaders</label>
-            </div>
-          </div>
-        </div>
-
-        <div class="area" style="margin-top:14px">
-          <div class="card">
-            <h3>Original</h3>
-            <div id="orig-c"></div>
-          </div>
-          <div class="card">
-            <h3>Processed</h3>
-            <div id="proc-c"></div>
+            <label>Swatch Lightness (%)</label>
+            <input id="swL" type="range" min="0" max="100" value="55" />
           </div>
         </div>
 
         <div class="footer">
-          <input type="file" id="file" accept="image/png, image/jpeg" />
-          <button id="download">Download Processed PNG</button>
-          <button id="sample">Load Sample Gradient</button>
+          <button id="exportPalette">Export Palette PNG</button>
+          <button id="exportWheel">Export Wheel + Guides PNG</button>
         </div>
-        <div class="tip">Tip: choose a PNG/JPG. The right canvas updates live as you tweak effects. For performance, large images are scaled down to fit the canvas.</div>
+        <div class="tip">Tip: Use the Hue input for precise values (0.1°). “Snap” rounds drag movements to that increment.</div>
       </div>
     </div>
   </div>
@@ -129,339 +101,206 @@
  * Color Theory Engine *
  **********************/
 const SCHEMES = {
-  mono:      [0, 0, 0, 0],
-  complementary: [0, 180, 0, 0],
-  split:     [0, 150, 210, 0],
-  analogous: [-30, 0, 30, 0],
-  triad:     [0, 120, 240, 0],
+  mono:      [0],
+  complementary: [0, 180],
+  split:     [0, 150, 210],
+  analogous: [-30, 0, 30],
+  triad:     [0, 120, 240],
   tetradRect:[0, 60, 180, 240],
   tetradSquare:[0, 90, 180, 270],
 };
 
-function hslToRgb(h, s, l){
-  s/=100; l/=100; const k=n=>(n+h/30)%12, a=s*Math.min(l,1-l);
+function hslToRgb(h, s, l){ s/=100; l/=100; const k=n=>(n+h/30)%12, a=s*Math.min(l,1-l);
   const f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));
-  return [Math.round(255*f(0)), Math.round(255*f(8)), Math.round(255*f(4))];
-}
-function rgbToHsl(r,g,b){
-  r/=255; g/=255; b/=255; const max=Math.max(r,g,b), min=Math.min(r,g,b); let h,s,l=(max+min)/2;
-  if(max===min){h=s=0;} else { const d=max-min; s=l>0.5? d/(2-max-min): d/(max+min);
-    switch(max){ case r:h=(g-b)/d+(g<b?6:0);break; case g:h=(b-r)/d+2;break; case b:h=(r-g)/d+4;break; }
-    h*=60; s*=100; l*=100;
-  }
-  return [h,s,l];
-}
-const toHex = (r,g,b)=>"#"+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase();
+  return [Math.round(255*f(0)), Math.round(255*f(8)), Math.round(255*f(4))]; }
+function toHex(r,g,b){ return "#"+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase(); }
 
 /****************
- * p5 Sketch(es) *
+ * App State     *
  ****************/
-let wheelSketch, imgOrigSketch, imgProcSketch;
-let baseHue = 200;    // starting hue
-let segments = 90;    // wheel detail
+let wheelSketch;
+let baseHue = 200.0;     // degrees (float for precision)
+let segments = 720;      // high-detail wheel
 let harmony = 'triad';
-let palette = [];
-let radius, cx, cy;   // for wheel
+let snapDeg = 1.0;       // rounding for drag input
+let swatchS = 80;        // palette saturation
+let swatchL = 55;        // palette lightness
+let radius, cx, cy;      // wheel geometry
 let dragging = false;
-let procImg, origImg; // p5.Image refs
-let controls = {};
-let duotoneOn = false;
 
 function computePalette(){
-  const angles = SCHEMES[harmony].filter(a=>!isNaN(a));
-  const hs = angles.map(a => (baseHue + a + 360) % 360);
-  // default sat/lig for swatches
-  return hs.map(h => toHex(...hslToRgb(h, 80, 55)));
+  const hs = SCHEMES[harmony].map(a => (baseHue + a + 360) % 360);
+  return hs.map(h => toHex(...hslToRgb(h, swatchS, swatchL)));
 }
 
 function updatePaletteUI(){
   const cont = document.getElementById('palette');
   cont.innerHTML = '';
-  palette = computePalette();
+  const palette = computePalette();
   palette.forEach(hex=>{
     const d = document.createElement('div');
     d.className='swatch';
-    d.style.background = hex;
-    d.title = hex;
+    d.style.background = hex; d.title = hex;
     d.onclick = async ()=>{ await navigator.clipboard.writeText(hex); d.style.outline='2px solid var(--accent)'; setTimeout(()=>d.style.outline='none', 600); };
     cont.appendChild(d);
   });
 }
 
-// ========== Wheel ==========
+/****************
+ * Wheel (p5)    *
+ ****************/
 const wheelCanvas = new p5(p => {
-  let W=560, H=560;
+  const W=560, H=560;
   p.setup = () => {
     const holder = document.getElementById('wheel-container');
-    const c = p.createCanvas(W, H);
-    c.parent(holder);
-    p.pixelDensity(1);
+    const c = p.createCanvas(W, H); c.parent(holder); p.pixelDensity(1);
     radius = Math.min(W, H)*0.46; cx=W/2; cy=H/2;
     drawWheel();
   };
 
   function drawWheel(){
-    p.clear();
-    // draw conic using many arcs
-    p.noStroke();
+    p.clear(); p.noStroke();
+    // High-resolution conic wheel
     for(let i=0;i<segments;i++){
       const a0 = p.TWO_PI * (i/segments);
       const a1 = p.TWO_PI * ((i+1)/segments);
       const deg = (360 * i/segments);
       const col = hslToRgb(deg, 100, 50);
-      p.fill(...col);
-      p.arc(cx, cy, radius*2, radius*2, a0, a1, p.PIE);
+      p.fill(...col); p.arc(cx, cy, radius*2, radius*2, a0, a1, p.PIE);
     }
-    // inner hole
+    // inner hole for readability
     p.fill(16,22,34); p.circle(cx, cy, radius*0.52);
 
-    // harmony lines/points
-    const angles = SCHEMES[harmony].filter(a=>!isNaN(a));
-    p.stroke(0,0,0,120); p.strokeWeight(3);
-    const points = angles.map(a=>{
+    // Harmony guides
+    const pts = SCHEMES[harmony].map(a => {
       const d = (baseHue + a) % 360; const rad = p.radians(d-90);
       return {x: cx + Math.cos(rad)*radius*0.9, y: cy + Math.sin(rad)*radius*0.9, d};
     });
-    p.noFill();
-    p.beginShape(); points.forEach(pt=>p.vertex(pt.x, pt.y)); if(points.length>2) p.endShape(p.CLOSE); else p.endShape();
+    p.stroke(0,0,0,120); p.strokeWeight(3); p.noFill();
+    p.beginShape(); pts.forEach(pt=>p.vertex(pt.x, pt.y)); if(pts.length>2) p.endShape(p.CLOSE); else p.endShape();
     p.stroke(0,212,255,220); p.strokeWeight(2);
-    p.beginShape(); points.forEach(pt=>p.vertex(pt.x, pt.y)); if(points.length>2) p.endShape(p.CLOSE); else p.endShape();
+    p.beginShape(); pts.forEach(pt=>p.vertex(pt.x, pt.y)); if(pts.length>2) p.endShape(p.CLOSE); else p.endShape();
 
-    // draggable base handle (at baseHue)
+    // Handle at base hue
     const rad = p.radians(baseHue-90);
     const hx = cx + Math.cos(rad)*radius*0.9;
     const hy = cy + Math.sin(rad)*radius*0.9;
     p.noStroke(); p.fill(255); p.circle(hx, hy, 14); p.fill(0); p.circle(hx, hy, 6);
 
-    // label
+    // Readout
+    const baseHex = toHex(...hslToRgb(baseHue, swatchS, swatchL));
     p.noStroke(); p.fill(232,238,247); p.textAlign(p.CENTER, p.CENTER); p.textSize(14);
-    p.text(`Hue: ${Math.round(baseHue)}°  •  Harmony: ${harmony}`, cx, H-18);
+    p.text(`Hue: ${baseHue.toFixed(1)}° • ${harmony} • ${baseHex}`, cx, H-18);
+
+    // Sync numeric input
+    const hueNum = document.getElementById('hueNum');
+    if(document.activeElement !== hueNum){ hueNum.value = baseHue.toFixed(1); }
   }
 
   function setHueFromMouse(){
     const dx = p.mouseX - cx; const dy = p.mouseY - cy;
-    const angle = Math.atan2(dy, dx); // radians
-    baseHue = (p.degrees(angle) + 90 + 360) % 360;
+    let h = (p.degrees(Math.atan2(dy, dx)) + 90 + 360) % 360;
+    if(snapDeg>0){ h = Math.round(h / snapDeg) * snapDeg; }
+    baseHue = ((h % 360) + 360) % 360;
   }
 
   p.mousePressed = () => {
     const d = p.dist(p.mouseX, p.mouseY, cx, cy);
-    if (d > radius*0.7 && d < radius*1.05){ dragging = true; setHueFromMouse(); updatePaletteUI(); drawWheel(); scheduleProcess(); }
+    if (d > radius*0.7 && d < radius*1.05){ dragging = true; setHueFromMouse(); updatePaletteUI(); drawWheel(); }
   };
-  p.mouseDragged = () => { if(dragging){ setHueFromMouse(); updatePaletteUI(); drawWheel(); scheduleProcess(); } };
+  p.mouseDragged = () => { if(dragging){ setHueFromMouse(); updatePaletteUI(); drawWheel(); } };
   p.mouseReleased = () => { dragging=false; };
 
-  p.windowResized = () => { /* keep fixed size for clarity */ };
-
-  // public API
-  wheelSketch = {
-    redraw: () => { drawWheel(); }
-  };
+  // expose
+  wheelSketch = { redraw: drawWheel };
 });
 
-// ========== Image canvases ==========
-const origCanvas = new p5(p => {
-  let W=520,H=360; p.setup = ()=>{ const c=p.createCanvas(W,H); c.parent(document.getElementById('orig-c')); p.background(20); }; imgOrigSketch=p;});
-let glShader;
-const procCanvas = new p5(p => {
-  let W=520, H=360;
-  p.setup = () => {
-    const c = p.createCanvas(W, H, p.WEBGL);
-    c.parent(document.getElementById('proc-c'));
-    p.background(20);
-    glShader = p.createShader(vertSrc, fragSrc);
-  };
-  imgProcSketch = p;
-});
-
-/*******************
- * Image Processing *
- *******************/
-let scheduleId = null;
-function scheduleProcess(){ clearTimeout(scheduleId); scheduleId = setTimeout(applyEffects, 40); }
-
-function loadFromFile(file){
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = new Image(); img.onload = () => {
-      const g = new p5.Image(img.width, img.height);
-      g.canvas = img; // create from HTMLImageElement
-    };
-  };
-}
-
-function setOrig(img){
-  origImg = img;
-  const p = imgOrigSketch, w = p.width, h = p.height;
-  p.background(16);
-  const scale = Math.min(w/img.width, h/img.height);
-  const dw = img.width*scale, dh = img.height*scale;
-  p.image(img, (w-dw)/2, (h-dh)/2, dw, dh);
-}
-
-function applyEffects(){
-  if(!origImg) return;
-  const p = imgProcSketch;
-  const w=p.width, h=p.height; p.clear();
-  if(document.getElementById('useGL').checked){
-    // WEBGL shader path
-    const hueRot = Number(document.getElementById('hueRot').value) * Math.PI/180.0;
-    const satMul = Number(document.getElementById('sat').value)/100.0;
-    const briMul = Number(document.getElementById('bri').value)/100.0;
-    const conMul = Number(document.getElementById('con').value)/100.0;
-    const duoA = document.getElementById('duoA').value; const duoB = document.getElementById('duoB').value;
-    const [aR,aG,aB] = hexToRgb(duoA).map(v=>v/255); const [bR,bG,bB] = hexToRgb(duoB).map(v=>v/255);
-
-    if(!glShader){ glShader = imgProcSketch.createShader(vertSrc, fragSrc); }
-    imgProcSketch.shader(glShader);
-    glShader.setUniform('tex0', origImg);
-    glShader.setUniform('u_resolution', [w,h]);
-    glShader.setUniform('u_hue', hueRot);
-    glShader.setUniform('u_sat', satMul);
-    glShader.setUniform('u_bri', briMul);
-    glShader.setUniform('u_con', conMul);
-    glShader.setUniform('u_duotone', duotoneOn?1:0);
-    glShader.setUniform('u_duoA', [aR,aG,aB]);
-    glShader.setUniform('u_duoB', [bR,bG,bB]);
-    imgProcSketch.noStroke();
-    imgProcSketch.rect(-w/2, -h/2, w, h);
-  } else {
-    // CPU fallback (original path)
-    const scale = Math.min(w/origImg.width, h/origImg.height);
-    const dw = Math.max(1, Math.floor(origImg.width*scale));
-    const dh = Math.max(1, Math.floor(origImg.height*scale));
-    const tmp = p.createImage(dw, dh); tmp.copy(origImg, 0,0, origImg.width, origImg.height, 0,0,dw,dh);
-    tmp.loadPixels();
-    const hueRot = Number(document.getElementById('hueRot').value);
-    const satMul = Number(document.getElementById('sat').value)/100;
-    const briMul = Number(document.getElementById('bri').value)/100;
-    const conMul = Number(document.getElementById('con').value)/100;
-    const duoA = document.getElementById('duoA').value; const duoB = document.getElementById('duoB').value;
-    const [aR,aG,aB] = hexToRgb(duoA); const [bR,bG,bB] = hexToRgb(duoB);
-    for(let i=0;i<tmp.pixels.length;i+=4){
-      let r=tmp.pixels[i], g=tmp.pixels[i+1], b=tmp.pixels[i+2];
-      let [h,s,l] = rgbToHsl(r,g,b);
-      h = (h + hueRot + 360) % 360; s = Math.min(100, Math.max(0, s*satMul)); l = Math.min(100, Math.max(0, l*briMul));
-      [r,g,b] = hslToRgb(h,s,l);
-      r = clamp((r-128)*conMul + 128); g = clamp((g-128)*conMul + 128); b = clamp((b-128)*conMul + 128);
-      if(duotoneOn){ const Y=(0.2126*r+0.7152*g+0.0722*b)/255; r=Math.round(aR*(1-Y)+bR*Y); g=Math.round(aG*(1-Y)+bG*Y); b=Math.round(aB*(1-Y)+bB*Y);} 
-      tmp.pixels[i]=r; tmp.pixels[i+1]=g; tmp.pixels[i+2]=b;
-    }
-    tmp.updatePixels(); p.image(tmp, -dw/2, -dh/2);
-  }
-}
-
-
-function clamp(v){ return Math.max(0, Math.min(255, v)); }
-function hexToRgb(hex){ const n=parseInt(hex.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
-
-/*************
- * UI Wiring *
- *************/
-function initUI(){
-  // controls
-  controls.harmony = document.getElementById('harmony');
-  controls.harmony.value = harmony;
-  controls.harmony.onchange = () => { harmony = controls.harmony.value; wheelSketch.redraw(); updatePaletteUI(); };
-
-  document.getElementById('segments').oninput = (e)=>{ segments = Number(e.target.value); wheelSketch.redraw(); };
-  ['hueRot','sat','bri','con','useGL'].forEach(id=> document.getElementById(id).oninput = scheduleProcess);
-
-  document.getElementById('toggleDuotone').onclick = ()=>{ duotoneOn=!duotoneOn; scheduleProcess(); };
-  document.getElementById('useHarmony').onclick = ()=>{
-    updatePaletteUI();
-    const hexA = palette[0] || '#1a1a2e';
-    const hexB = palette[1] || '#ff7a18';
-    document.getElementById('duoA').value = hexA; document.getElementById('duoB').value = hexB; scheduleProcess();
-  };
-  document.getElementById('duoA').oninput = scheduleProcess;
-  document.getElementById('duoB').oninput = scheduleProcess;
-
-  document.getElementById('resetFX').onclick = ()=>{
-    ['hueRot','sat','bri','con'].forEach(id=> document.getElementById(id).value = ({hueRot:0,sat:100,bri:100,con:100}[id]));
-    duotoneOn=false; document.getElementById('useGL').checked=false; scheduleProcess();
-  };
-
-  document.getElementById('file').addEventListener('change', (e)=>{
-    const f=e.target.files[0]; if(!f) return; const url=URL.createObjectURL(f);
-    const img = new Image(); img.onload = ()=>{
-      const tmp = document.createElement('canvas'); tmp.width=img.width; tmp.height=img.height; const ctx=tmp.getContext('2d'); ctx.drawImage(img,0,0);
-      const pimg = imgProcSketch.createImage(img.width, img.height); const data=ctx.getImageData(0,0,img.width,img.height);
-      pimg.loadPixels(); pimg.pixels.set(data.data); pimg.updatePixels();
-      origImg = pimg; setOrig(origImg); scheduleProcess(); URL.revokeObjectURL(url);
-    }; img.src = url;
+/****************
+ * Export PNGs   *
+ ****************/
+function exportPalettePNG(){
+  const items = computePalette();
+  const cellW=220, cellH=120, pad=24, cols=Math.min(items.length, 4), rows=Math.ceil(items.length/4);
+  const W = pad*2 + cols*cellW, H = pad*2 + rows*cellH + 40;
+  const can = document.createElement('canvas'); can.width=W; can.height=H; const ctx = can.getContext('2d');
+  // bg
+  ctx.fillStyle = '#0b0e14'; ctx.fillRect(0,0,W,H);
+  // title
+  ctx.font='18px Inter,Arial'; ctx.fillStyle='#e8eef7'; ctx.textAlign='left'; ctx.fillText(`Palette — ${harmony} @ ${baseHue.toFixed(1)}°  (S:${swatchS} L:${swatchL})`, pad, pad+4);
+  // cells
+  items.forEach((hex, i)=>{
+    const x = pad + (i%4)*cellW; const y = pad+40 + Math.floor(i/4)*cellH;
+    // swatch
+    ctx.fillStyle = hex; ctx.strokeStyle = '#223048'; ctx.lineWidth=2;
+    ctx.fillRect(x, y, cellW-16, cellH-46); ctx.strokeRect(x, y, cellW-16, cellH-46);
+    // label area
+    ctx.fillStyle = '#101826'; ctx.fillRect(x, y+cellH-46, cellW-16, 46);
+    ctx.strokeStyle = '#223048'; ctx.strokeRect(x, y+cellH-46, cellW-16, 46);
+    // text
+    ctx.fillStyle = '#9fb0c6'; ctx.font='12px Inter,Arial'; ctx.fillText(hex, x+10, y+cellH-20);
   });
-  document.getElementById('download').onclick = ()=>{
-    const link = document.createElement('a'); link.download = 'processed.png'; link.href = imgProcSketch.canvas.toDataURL('image/png'); link.click();
-  };
-  document.getElementById('sample').onclick = ()=>{
-    const w=1024,h=640; const pimg = imgProcSketch.createImage(w,h); pimg.loadPixels();
-    for(let y=0;y<h;y++){
-      for(let x=0;x<w;x++){
-        const t = x/(w-1); const hhh = (baseHue + t*180) % 360; const [r,g,b]=hslToRgb(hhh, 80, 50);
-        const idx=(y*w+x)*4; pimg.pixels[idx]=r; pimg.pixels[idx+1]=g; pimg.pixels[idx+2]=b; pimg.pixels[idx+3]=255;
-      }
-    }
-    pimg.updatePixels(); origImg=pimg; setOrig(origImg); scheduleProcess();
-  };
+  triggerDownload(can, `palette_${harmony}_${Math.round(baseHue*10)}.png`);
+}
+
+function exportWheelPNG(){
+  const size=900; const pad=30; const R = size*0.38; const cx = size/2, cy = size/2;
+  const can = document.createElement('canvas'); can.width=size; can.height=size; const ctx=can.getContext('2d');
+  // bg
+  ctx.fillStyle='#0b0e14'; ctx.fillRect(0,0,size,size);
+  // conic approximation
+  for(let i=0;i<segments;i++){
+    const a0 = 2*Math.PI*(i/segments); const a1 = 2*Math.PI*((i+1)/segments);
+    const deg = 360 * i/segments; const [r,g,b]=hslToRgb(deg,100,50);
+    ctx.fillStyle=`rgb(${r},${g},${b})`;
+    ctx.beginPath(); ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,R,a0,a1,false); ctx.closePath(); ctx.fill();
+  }
+  // inner hole
+  ctx.fillStyle='#101826'; ctx.beginPath(); ctx.arc(cx,cy,R*0.52,0,Math.PI*2); ctx.fill();
+  // guides
+  const angles = SCHEMES[harmony].map(a => (baseHue + a) % 360);
+  ctx.lineWidth=6; ctx.strokeStyle='rgba(0,0,0,0.45)';
+  ctx.beginPath(); angles.forEach((d,i)=>{ const rad=(d-90)*Math.PI/180; const x=cx+Math.cos(rad)*R*0.9; const y=cy+Math.sin(rad)*R*0.9; (i?ctx.lineTo:ctx.moveTo).call(ctx,x,y); }); if(angles.length>2) ctx.closePath(); ctx.stroke();
+  ctx.lineWidth=3; ctx.strokeStyle='rgba(0,212,255,0.85)';
+  ctx.beginPath(); angles.forEach((d,i)=>{ const rad=(d-90)*Math.PI/180; const x=cx+Math.cos(rad)*R*0.9; const y=cy+Math.sin(rad)*R*0.9; (i?ctx.lineTo:ctx.moveTo).call(ctx,x,y); }); if(angles.length>2) ctx.closePath(); ctx.stroke();
+  // nodes
+  angles.forEach(d=>{ const rad=(d-90)*Math.PI/180; const x=cx+Math.cos(rad)*R*0.9; const y=cy+Math.sin(rad)*R*0.9; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,9,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#000'; ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2); ctx.fill(); });
+  // footer text
+  ctx.fillStyle='#e8eef7'; ctx.font='20px Inter,Arial'; ctx.textAlign='center';
+  const baseHex = toHex(...hslToRgb(baseHue, swatchS, swatchL));
+  ctx.fillText(`Hue ${baseHue.toFixed(1)}°  •  ${harmony}  •  ${baseHex}`, cx, size-pad);
+  triggerDownload(can, `wheel_${harmony}_${Math.round(baseHue*10)}.png`);
+}
+
+function triggerDownload(canvas, filename){ const a=document.createElement('a'); a.download=filename; a.href=canvas.toDataURL('image/png'); a.click(); }
+
+/****************
+ * UI Wiring     *
+ ****************/
+function initUI(){
+  document.getElementById('harmony').value = harmony;
+  document.getElementById('harmony').onchange = (e)=>{ harmony = e.target.value; wheelSketch.redraw(); updatePaletteUI(); };
+
+  document.getElementById('segments').value = segments;
+  document.getElementById('segments').oninput = (e)=>{ segments = Number(e.target.value); wheelSketch.redraw(); };
+
+  document.getElementById('hueNum').value = baseHue.toFixed(1);
+  document.getElementById('hueNum').oninput = (e)=>{ const v=parseFloat(e.target.value||'0'); baseHue=((v%360)+360)%360; wheelSketch.redraw(); updatePaletteUI(); };
+
+  document.getElementById('snap').value = snapDeg;
+  document.getElementById('snap').oninput = (e)=>{ snapDeg = Math.max(0, parseFloat(e.target.value||'0')); };
+
+  document.getElementById('swS').value = swatchS; document.getElementById('swL').value = swatchL;
+  document.getElementById('swS').oninput = (e)=>{ swatchS = Number(e.target.value); updatePaletteUI(); wheelSketch.redraw(); };
+  document.getElementById('swL').oninput = (e)=>{ swatchL = Number(e.target.value); updatePaletteUI(); wheelSketch.redraw(); };
+
+  document.getElementById('exportPalette').onclick = exportPalettePNG;
+  document.getElementById('exportWheel').onclick = exportWheelPNG;
 
   updatePaletteUI();
 }
 
 initUI();
-
-
-// ====== Shaders (inline to avoid CORS on GitHub Pages) ======
-const vertSrc = `
-  precision mediump float;
-  attribute vec3 aPosition;
-  attribute vec2 aTexCoord;
-  varying vec2 vTex;
-  void main(){ vTex = aTexCoord; gl_Position = vec4(aPosition,1.0);} 
-`;
-const fragSrc = `
-  precision mediump float;
-  varying vec2 vTex;
-  uniform sampler2D tex0;
-  uniform vec2 u_resolution;
-  uniform float u_hue;  // radians
-  uniform float u_sat;  // 1.0 = neutral
-  uniform float u_bri;  // 1.0 = neutral
-  uniform float u_con;  // 1.0 = neutral
-  uniform int u_duotone;
-  uniform vec3 u_duoA;
-  uniform vec3 u_duoB;
-
-  vec3 rgb2hsl(vec3 c){
-    float r=c.r, g=c.g, b=c.b;
-    float maxc=max(max(r,g),b); float minc=min(min(r,g),b); float h=0.0; float s=0.0; float l=(maxc+minc)*0.5;
-    if(maxc!=minc){
-      float d=maxc-minc; s = l>0.5 ? d/(2.0-maxc-minc) : d/(maxc+minc);
-      if(maxc==r) h=(g-b)/d + (g<b ? 6.0:0.0);
-      else if(maxc==g) h=(b-r)/d + 2.0; else h=(r-g)/d + 4.0; h/=6.0; }
-    return vec3(h,s,l);
-  }
-  float hue2rgb(float p, float q, float t){ if(t<0.0) t+=1.0; if(t>1.0) t-=1.0; if(t<1.0/6.0) return p + (q-p)*6.0*t; if(t<1.0/2.0) return q; if(t<2.0/3.0) return p + (q-p)*(2.0/3.0 - t)*6.0; return p; }
-  vec3 hsl2rgb(vec3 c){ float h=c.x, s=c.y, l=c.z; float r,g,b; if(s==0.0){ r=g=b=l; } else { float q = l<0.5 ? l*(1.0+s) : l + s - l*s; float p = 2.0*l - q; r = hue2rgb(p,q,h+1.0/3.0); g=hue2rgb(p,q,h); b=hue2rgb(p,q,h-1.0/3.0);} return vec3(r,g,b);} 
-
-  void main(){
-    vec2 uv = vTex; vec4 c = texture2D(tex0, uv);
-    vec3 hsl = rgb2hsl(c.rgb);
-    hsl.x = mod(hsl.x + (u_hue/6.28318530718), 1.0); // hue rotate
-    hsl.y = clamp(hsl.y * u_sat, 0.0, 1.0);
-    hsl.z = clamp(hsl.z * u_bri, 0.0, 1.0);
-    vec3 col = hsl2rgb(hsl);
-    // contrast
-    col = (col - 0.5) * u_con + 0.5;
-    col = clamp(col, 0.0, 1.0);
-    if(u_duotone==1){
-      float Y = dot(col, vec3(0.2126,0.7152,0.0722));
-      col = mix(u_duoA, u_duoB, Y);
-    }
-    gl_FragColor = vec4(col, 1.0);
-  }
-`;
-
 </script>
 </body>
 </html>
