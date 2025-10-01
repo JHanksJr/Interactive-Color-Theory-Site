@@ -22,6 +22,10 @@
   select,input[type="range"],button{width:100%;background:#0e1522;border:1px solid var(--stroke);color:#e8eef7;padding:10px;border-radius:10px}
   button{cursor:pointer}
   .row{display:grid;gap:12px;grid-template-columns:repeat(4,minmax(0,1fr))}
+  .current{display:grid;grid-template-columns:180px 1fr;align-items:center;gap:12px;margin-top:12px}
+  .current-box{height:64px;border-radius:12px;border:1px solid var(--stroke);box-shadow:inset 0 -24px 48px rgba(0,0,0,.25)}
+  .current-meta{font-size:13px;color:var(--muted);line-height:1.5}
+  .current-meta b{color:#e8eef7}
   .swatch{height:56px;border-radius:12px;border:1px solid var(--stroke);box-shadow:inset 0 -24px 48px rgba(0,0,0,.25)}
   .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--muted)}
   .area{display:grid;gap:16px;grid-template-columns:1fr 1fr}
@@ -44,6 +48,18 @@
       <div class="panel">
         <div id="wheel-container"></div>
         <div class="legend">
+          <div><span class="kbd">Drag</span> handle to set base hue</div>
+          <div>• Harmony lines show relationships</div>
+          <div>• Click swatches to copy hex</div>
+        </div>
+        <div id="current" class="current">
+          <div id="currentBox" class="current-box"></div>
+          <div class="current-meta">
+            <div><b>Current color</b> matches the handle & swatches.</div>
+            <div>HEX: <span id="hexOut">—</span></div>
+            <div>HSL: <span id="hslOut">—</span></div>
+          </div>
+        </div>
           <div><span class="kbd">Drag</span> handle to set base hue</div>
           <div>• Harmony lines show relationships</div>
           <div>• Click swatches to copy hex</div>
@@ -144,6 +160,20 @@ function updatePaletteUI(){
     d.onclick = async ()=>{ await navigator.clipboard.writeText(hex); d.style.outline='2px solid var(--accent)'; setTimeout(()=>d.style.outline='none', 600); };
     cont.appendChild(d);
   });
+  updateCurrentColorUI();
+}
+
+function updateCurrentColorUI(){
+  const hex = toHex(...hslToRgb(baseHue, swatchS, swatchL));
+  const box = document.getElementById('currentBox');
+  const hexOut = document.getElementById('hexOut');
+  const hslOut = document.getElementById('hslOut');
+  if(box){ box.style.background = hex; }
+  if(hexOut){ hexOut.textContent = hex; }
+  if(hslOut){ hslOut.textContent = `hsl(${baseHue.toFixed(1)}°, ${swatchS}%, ${swatchL}%)`; }
+};
+    cont.appendChild(d);
+  });
 }
 
 /****************
@@ -181,16 +211,19 @@ const wheelCanvas = new p5(p => {
     p.stroke(0,212,255,220); p.strokeWeight(2);
     p.beginShape(); pts.forEach(pt=>p.vertex(pt.x, pt.y)); if(pts.length>2) p.endShape(p.CLOSE); else p.endShape();
 
-    // Handle at base hue
-    const rad = p.radians(baseHue-90);
-    const hx = cx + Math.cos(rad)*radius*0.9;
-    const hy = cy + Math.sin(rad)*radius*0.9;
-    p.noStroke(); p.fill(255); p.circle(hx, hy, 14); p.fill(0); p.circle(hx, hy, 6);
+    // Handle at base hue — fill with the EXACT current swatch color so it matches palette/hex
+    const handleHexRgb = hslToRgb(baseHue, swatchS, swatchL);
+    p.noStroke();
+    p.fill(255); p.circle(hx, hy, 16); // outer ring
+    p.fill(...handleHexRgb); p.circle(hx, hy, 12); // actual selected color
+    // inner dot for focus contrast
+    const yiq = (0.299*handleHexRgb[0] + 0.587*handleHexRgb[1] + 0.114*handleHexRgb[2]);
+    p.fill(yiq > 150 ? 0 : 255); p.circle(hx, hy, 4);
 
     // Readout
     const baseHex = toHex(...hslToRgb(baseHue, swatchS, swatchL));
     p.noStroke(); p.fill(232,238,247); p.textAlign(p.CENTER, p.CENTER); p.textSize(14);
-    p.text(`Hue: ${baseHue.toFixed(1)}° • ${harmony} • ${baseHex}`, cx, H-18);
+    p.text(`Hue: ${baseHue.toFixed(1)}° • ${harmony} • ${baseHex}`, cx, H-18);`Hue: ${baseHue.toFixed(1)}° • ${harmony} • ${baseHex}`, cx, H-18);
 
     // Sync numeric input
     const hueNum = document.getElementById('hueNum');
