@@ -60,10 +60,6 @@
             <div>HSL: <span id="hslOut">—</span></div>
           </div>
         </div>
-          <div><span class="kbd">Drag</span> handle to set base hue</div>
-          <div>• Harmony lines show relationships</div>
-          <div>• Click swatches to copy hex</div>
-        </div>
         <div id="palette" class="row" style="margin-top:10px"></div>
       </div>
 
@@ -149,6 +145,16 @@ function computePalette(){
   return hs.map(h => toHex(...hslToRgb(h, swatchS, swatchL)));
 }
 
+function updateCurrentColorUI(){
+  const hex = toHex(...hslToRgb(baseHue, swatchS, swatchL));
+  const box = document.getElementById('currentBox');
+  const hexOut = document.getElementById('hexOut');
+  const hslOut = document.getElementById('hslOut');
+  if(box){ box.style.background = hex; }
+  if(hexOut){ hexOut.textContent = hex; }
+  if(hslOut){ hslOut.textContent = `hsl(${baseHue.toFixed(1)}°, ${swatchS}%, ${swatchL}%)`; }
+}
+
 function updatePaletteUI(){
   const cont = document.getElementById('palette');
   cont.innerHTML = '';
@@ -161,19 +167,6 @@ function updatePaletteUI(){
     cont.appendChild(d);
   });
   updateCurrentColorUI();
-}
-
-function updateCurrentColorUI(){
-  const hex = toHex(...hslToRgb(baseHue, swatchS, swatchL));
-  const box = document.getElementById('currentBox');
-  const hexOut = document.getElementById('hexOut');
-  const hslOut = document.getElementById('hslOut');
-  if(box){ box.style.background = hex; }
-  if(hexOut){ hexOut.textContent = hex; }
-  if(hslOut){ hslOut.textContent = `hsl(${baseHue.toFixed(1)}°, ${swatchS}%, ${swatchL}%)`; }
-};
-    cont.appendChild(d);
-  });
 }
 
 /****************
@@ -190,7 +183,7 @@ const wheelCanvas = new p5(p => {
 
   function drawWheel(){
     p.clear(); p.noStroke();
-    // High-resolution conic wheel
+    // High-resolution conic wheel (pure hues)
     for(let i=0;i<segments;i++){
       const a0 = p.TWO_PI * (i/segments);
       const a1 = p.TWO_PI * ((i+1)/segments);
@@ -211,19 +204,20 @@ const wheelCanvas = new p5(p => {
     p.stroke(0,212,255,220); p.strokeWeight(2);
     p.beginShape(); pts.forEach(pt=>p.vertex(pt.x, pt.y)); if(pts.length>2) p.endShape(p.CLOSE); else p.endShape();
 
-    // Handle at base hue — fill with the EXACT current swatch color so it matches palette/hex
-    const handleHexRgb = hslToRgb(baseHue, swatchS, swatchL);
-    p.noStroke();
-    p.fill(255); p.circle(hx, hy, 16); // outer ring
-    p.fill(...handleHexRgb); p.circle(hx, hy, 12); // actual selected color
-    // inner dot for focus contrast
-    const yiq = (0.299*handleHexRgb[0] + 0.587*handleHexRgb[1] + 0.114*handleHexRgb[2]);
+    // Handle at base hue — show EXACT swatch color
+    const hr = p.radians(baseHue-90);
+    const hx = cx + Math.cos(hr)*radius*0.9;
+    const hy = cy + Math.sin(hr)*radius*0.9;
+    const handleRgb = hslToRgb(baseHue, swatchS, swatchL);
+    p.noStroke(); p.fill(255); p.circle(hx, hy, 16); // outer ring
+    p.fill(...handleRgb); p.circle(hx, hy, 12);      // selected color
+    const yiq = (0.299*handleRgb[0] + 0.587*handleRgb[1] + 0.114*handleRgb[2]);
     p.fill(yiq > 150 ? 0 : 255); p.circle(hx, hy, 4);
 
     // Readout
     const baseHex = toHex(...hslToRgb(baseHue, swatchS, swatchL));
     p.noStroke(); p.fill(232,238,247); p.textAlign(p.CENTER, p.CENTER); p.textSize(14);
-    p.text(`Hue: ${baseHue.toFixed(1)}° • ${harmony} • ${baseHex}`, cx, H-18);`Hue: ${baseHue.toFixed(1)}° • ${harmony} • ${baseHex}`, cx, H-18);
+    p.text(`Hue: ${baseHue.toFixed(1)}° • ${harmony} • ${baseHex}`, cx, H-18);
 
     // Sync numeric input
     const hueNum = document.getElementById('hueNum');
